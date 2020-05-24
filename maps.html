@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.6.0/dist/leaflet.css"
+  integrity="sha512-xwE/Az9zrjBIphAcBb3F6JVqxf46+CDLwfLMHloNu6KEQCAWi6HcDUbeOfBIptF7tcCzusKFjFw2yuvEpDL9wQ=="
+  crossorigin=""/>
+<script src="https://unpkg.com/leaflet@1.6.0/dist/leaflet.js"
+  integrity="sha512-gZwIG9x3wUXg2hdXF6+rVkLF/0Vi9U8D2Ntg4Ga5I5BZpVkVxlJWbSQtXPSiUTtC0TjtGOmxa1AJPuV0CPthew=="
+  crossorigin=""></script>
+
+  <style>
+      body{
+          height: 100vh;
+          padding:0;
+          margin:0;
+      }
+      #map{
+          width: 100vw;
+          height: 100vh;
+      }
+      #search{
+        position:absolute;
+        top:18px;
+        left:50px;
+        width: 120px;
+        min-width: 120px;
+        max-width: 400px;
+        z-index: 9999;
+        outline: 0;
+        border:none;
+        border-radius: 20px;
+        box-shadow: 0 1px 6px 0 rgba(32, 33, 36, .28);
+        padding:10px 20px;
+        transition: width .4s ease;
+      }
+      #search:focus, #search:not(:placeholder-shown) {
+          width: 30vw;
+      }
+  </style>
+</head>
+<body> 
+    
+    <div id="map"><input type="text" id="search" placeholder="Search for location"></div>
+    <script>
+        var map = L.map('map', {
+            center: [51.505, -0.09],
+            zoom: 13
+        });
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '&copy; <a href="https://openstreetmap.org/copyright">OpenStreetMap contributors</a>'
+        }).addTo(map);
+
+        // show the scale bar on the lower left corner
+        L.control.scale().addTo(map);
+
+        searchMarker = new L.LayerGroup();
+        searchMarker.addTo(map);
+
+        window.addEventListener('load', function(){
+            getUserLocation();
+        })
+
+        document.getElementById("search").addEventListener('keypress', function (e) {
+            
+            if (e.key === 'Enter') {
+
+                getFirstSearchResult(e.target.value).then(function(data) {
+                    console.log(data)
+                    if(typeof data != "undefined"){
+                        var latlng = L.latLng(data.lat,data.lon);
+                        
+                        searchMarker.clearLayers();
+
+                        getDetailFromPlaceID(data.place_id).then(function(detail) {
+                            console.log(detail)
+                            
+                            markerConfig = {}
+                            if(typeof detail.icon != "undefined"){
+                                markerConfig = {icon: L.icon({iconUrl: detail.icon })}
+                            }
+                            marker = L.marker(latlng, markerConfig).bindPopup(`
+                            <p>Name : ${detail.localname}<br>
+                            Postal code : ${detail.calculated_postcode != null ? detail.calculated_postcode : "None"}<br>
+                            Category : ${detail.category}</p>
+
+                            `);
+                            searchMarker.addLayer(marker)
+                        });
+
+                        
+                        map.flyTo(latlng);
+                    }
+                })
+            }
+        });
+
+        async function getFirstSearchResult(searchTerm){
+            response = await fetch(`https://nominatim.openstreetmap.org/search/${searchTerm}?format=jsonv2`);
+            data = await response.json();
+            return data[0];
+        }
+
+        async function getDetailFromPlaceID(placeId){
+            response = await fetch(`https://nominatim.openstreetmap.org/details?place_id=${placeId}&format=json`);
+            data = await response.json();
+            return data;
+        }
+
+        function getUserLocation(){
+            var endPosition = {}
+
+            if(!window.localStorage.getItem("location")){
+                if (navigator.geolocation) {
+                    navigator.geolocation.getCurrentPosition(function(position){
+                        latlng = L.latLng(position.coords.latitude,position.coords.longitude);
+                        map.flyTo(latlng);
+                        
+                        window.localStorage.setItem("location", JSON.stringify({latitude: position.coords.latitude, longitude: position.coords.longitude}));
+                    });
+                } else {
+                    x.innerHTML = "Geolocation is not supported by this browser.";
+                }
+            }else{
+                position = JSON.parse(window.localStorage.getItem("location"))
+                latlng = L.latLng(position.latitude,position.longitude);
+                        map.panTo(latlng);
+            }
+        }
+    </script>
+</body>
+</html>
